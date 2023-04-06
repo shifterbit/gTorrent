@@ -3,16 +3,11 @@ package main
 import (
 	"fmt"
 	"gtorrent/bencode"
-	"os"
 )
 
 func main() {
-	path := os.Args[1]
-	_, err := bencode.ParseFile(path)
-	if err != nil {
-		fmt.Errorf("%v", err)
-	}
-
 	fmt.Println(bencode.ParseString("3:cow"))
+	fmt.Println(bencode.ParseInt("i12e"))
+	fmt.Println(bencode.ParseInt("i0e"))
 
 }
