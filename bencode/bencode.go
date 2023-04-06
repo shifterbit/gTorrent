@@ -30,6 +30,12 @@ func (i *BencodeInt) Value() any {
 	return int(*i)
 }
 
+type LeadingZeroError struct{}
+
+func (e *LeadingZeroError) Error() string {
+	return "cannot start an integer with a leading zero"
+}
+
 // Parses bencoded data and returns a `BencodeValue`
 func Parse(text string) (BencodeValue, error) {
 	// TODO
@@ -66,7 +72,7 @@ func ParseInt(str string) (BencodeInt, error) {
 	// We need to check for leading zeroes as integers with leading zeroes
 	// are considred invalid
 	if stringifiedNumber[0] == '0' && len(stringifiedNumber) > 1 {
-		return 0, errors.New("Bencode: Cannot parse integer with a leading zero")
+		return 0, &LeadingZeroError{}
 	}
 
 	num, err := strconv.Atoi(stringifiedNumber)
