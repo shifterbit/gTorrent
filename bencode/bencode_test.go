@@ -45,6 +45,28 @@ func TestParseIntLeadingZero(t *testing.T) {
 		if got != test.want && err != test.err {
 			t.Errorf("got %v, %v wanted %v, %v", got, err, test.want, test.err)
 		}
+	}
+}
 
+func TestParseString(t *testing.T) {
+	type test struct {
+		input string
+		want BencodeString
+	}
+
+	tests := []test{
+		{input: "3:foo", want: BencodeString{String: "foo", Length: 3}},
+		{input: "4:spam", want: BencodeString{String: "spam", Length: 4}},
+		{input: "6:foobar", want: BencodeString{String: "foobar", Length: 6}},
+		{input: "0:", want: BencodeString{String: "", Length: 0}},
+	}
+	for _, test := range tests {
+		got, err := ParseString(test.input)
+		if err != nil {
+			t.Error(err)
+		}
+		if got != test.want {
+			t.Errorf("got %q, %v wanted %q, %v", got, err, test.want, nil)
+		}
 	}
 }

@@ -16,14 +16,14 @@ type BencodeValue interface {
 }
 
 type BencodeString struct {
-	length int
-	str    string
+	Length int
+	String    string
 }
 
 type BencodeInt int
 
 func (s *BencodeString) Value() any {
-	return s.str
+	return s.String
 }
 
 func (i *BencodeInt) Value() any {
@@ -52,8 +52,8 @@ func ParseString(str string) (BencodeString, error) {
 	}
 
 	return BencodeString{
-		length: length,
-		str:    val[1],
+		Length: length,
+		String:    val[1],
 	}, nil
 }
 
