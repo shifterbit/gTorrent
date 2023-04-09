@@ -2,32 +2,54 @@ package bencode
 
 import (
 	"errors"
+	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 )
+
+type BencodeText struct {
+	Length int
+	String string
+}
 
 type BencodeValue interface {
 	/*
 	 Converts a Given `BencodeValue` to a plain Go value
 	   - `BencodeString` becomes `string`
 	   - `BencodeInt` becomes `int`
+	   - `BencodeList` becomes []interface
 	*/
 	Value() any
 }
 
 type BencodeString struct {
 	Length int
-	String    string
+	String string
 }
 
-type BencodeInt int
+type BencodeInt struct {
+	Number int
+}
+
+type BencodeList struct {
+	Items []BencodeValue
+}
 
 func (s *BencodeString) Value() any {
 	return s.String
 }
 
 func (i *BencodeInt) Value() any {
-	return int(*i)
+	return int(i.Number)
+}
+
+func (i *BencodeList) Value() any {
+	var list []any
+	for _, item := range i.Items {
+		list = append(list, item.Value())
+	}
+	return list
 }
 
 type LeadingZeroError struct{}
@@ -36,50 +58,219 @@ func (e *LeadingZeroError) Error() string {
 	return "cannot start an integer with a leading zero"
 }
 
+type IncorrectStringLengthError struct {
+	String         string
+	ExpectedLength int
+	ActualLength   int
+}
+
+func (e *IncorrectStringLengthError) Error() string {
+	return fmt.Sprintf("unexpected string length for %q, got %d, expected %d", e.String, e.ActualLength, e.ExpectedLength)
+}
+
+
+
 // Parses bencoded data and returns a `BencodeValue`
-func Parse(text string) (BencodeValue, error) {
-	// TODO
-	return nil, nil
+func Parse(str string) (BencodeValue, error) {
+	start := str[0]
+
+	var res BencodeValue
+	var err error = nil
+	switch {
+	case isDigit(string(start)):
+		res, err = ParseString(str)
+	case start == 'i':
+		res, err = ParseInt(str)
+	case start == 'l':
+		res, err = ParseList(str)
+	default:
+		res, err = nil, errors.New("Invalid bencode")
+	}
+
+	return res, err
 
 }
 
 // Parses a bencoded string, returning `BencodeString`
-func ParseString(str string) (BencodeString, error) {
+func ParseString(str string) (*BencodeString, error) {
 	val := strings.SplitN(str, ":", 2)
+
 	length, err := strconv.Atoi(val[0])
 	if err != nil {
-		return BencodeString{}, err
+		return nil, err
 	}
 
-	return BencodeString{
+	if length != len(val[1]) {
+		return nil,
+			&IncorrectStringLengthError{
+				String:         val[1],
+				ActualLength:   len(val[1]),
+				ExpectedLength: length,
+			}
+	}
+
+	return &BencodeString{
 		Length: length,
-		String:    val[1],
+		String: val[1],
 	}, nil
 }
 
 // Parses a bencoded integer, returning `BencodeInteger`
-func ParseInt(str string) (BencodeInt, error) {
-	start := str[0]
+func ParseInt(str string) (*BencodeInt, error) {
 	end := str[len(str)-1]
-	if start != 'i' {
-		return 0, errors.New("Bencode: Error Parsing Int")
-	}
 	if end != 'e' {
-		return 0, errors.New("Bencode: Unexpected End of File")
+		return nil, errors.New("bencode: Unexpected End of File")
 	}
 
 	stringifiedNumber := str[1 : len(str)-1]
 	// We need to check for leading zeroes as integers with leading zeroes
 	// are considred invalid
 	if stringifiedNumber[0] == '0' && len(stringifiedNumber) > 1 {
-		return 0, &LeadingZeroError{}
+		return nil, &LeadingZeroError{}
 	}
 
 	num, err := strconv.Atoi(stringifiedNumber)
 
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
-	return BencodeInt(num), nil
+	return &BencodeInt{Number: num}, nil
+}
+
+// Parse a bencoded list, returning a list of `BencodedValue`
+func ParseList(str string) (*BencodeList, error) {
+	// TODO figure out why nested lists with strings causes the program to hang
+	str = str[1:]
+	end := str[len(str)-1]
+	if end != 'e' {
+		return nil, errors.New("bencode: Unexpected End of File")
+	}
+	var list BencodeList
+	for len(str) > 1 {
+		switch {
+		case isDigit(string(str[0])):
+			text := readString(str)
+			val, err := Parse(str[:text.Length])
+			if err != nil {
+				return nil, err
+			}
+			list.Items = append(list.Items, val)
+			str = str[text.Length:]
+		case str[0] == 'i':
+			text := readInt(str)
+			val, err := Parse(str[:text.Length])
+			if err != nil {
+				return nil, err
+			}
+			list.Items = append(list.Items, val)
+			str = str[text.Length:]
+		case str[0] == 'l':
+			text := readList(str[1:])
+			val, err := ParseList(str[:text.Length])
+			if err != nil {
+				return nil, err
+			}
+			list.Items = append(list.Items, val)
+			str = str[text.Length:]
+		case str[0] == 'e':
+			str = str[1:]
+		}
+	}
+
+	return &list, nil
+}
+
+func isDigit(str string) bool {
+	start := string(str[0])
+	isDigit := regexp.MustCompile(`\d`)
+	return isDigit.MatchString(start)
+}
+
+func readString(str string) BencodeText {
+	length := 0
+	digits := ""
+	loopComplete := false
+	for _, c := range str {
+		if loopComplete == true {
+			break
+		}
+
+		switch {
+		case isDigit(string(c)):
+			digits = digits + string(c)
+			length = length + 1
+		case c == ':':
+			length = length + 1
+			loopComplete = true
+			break
+		}
+	}
+
+	stringLength, _ := strconv.Atoi(string(digits))
+	length = length + stringLength
+
+	return BencodeText{
+		Length: length,
+		String: str[:length],
+	}
+}
+
+func readInt(str string) BencodeText {
+	digits := ""
+	length := 0
+	loopComplete := false
+	for _, c := range str {
+		if loopComplete == true {
+			break
+		}
+		switch {
+		case c == 'i':
+			length = length + 1
+		case isDigit(string(c)):
+			digits = digits + string(c)
+			length = length + 1
+		case c == 'e':
+			loopComplete = true
+			length = length + 1
+		}
+	}
+
+	return BencodeText{
+		String: str[:length],
+		Length: length,
+	}
+}
+
+func readList(str string) BencodeText {
+	length := 0
+	text := ""
+	loopComplete := false
+	for len(str) > 1 {
+		if loopComplete == true {
+			break
+		}
+		switch {
+		case isDigit(string(str[0])):
+			stringText := readString(str)
+			text = text + stringText.String
+			length = length + stringText.Length
+			str = str[stringText.Length:]
+		case str[0] == 'i':
+			intText := readInt(str)
+			text = text + intText.String
+			length = length + intText.Length
+			str = str[intText.Length:]
+		case str[0] == 'l':
+			listText := readList(str[1:])
+			text = text + listText.String
+			length = length + listText.Length
+			str = str[listText.Length:]
+		case str[0] == 'e':
+			length = length + 1
+			loopComplete = true
+			str = str[1:]
+		}
+	}
+	return BencodeText{String: text, Length: length}
 }
