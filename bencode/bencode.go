@@ -140,7 +140,6 @@ func ParseInt(str string) (*BencodeInt, error) {
 
 // Parse a bencoded list, returning a list of `BencodedValue`
 func ParseList(str string) (*BencodeList, error) {
-	// TODO figure out why nested lists with strings causes the program to hang
 	str = str[1:]
 	end := str[len(str)-1]
 	if end != 'e' {
@@ -243,8 +242,8 @@ func readInt(str string) BencodeText {
 }
 
 func readList(str string) BencodeText {
-	length := 0
-	text := ""
+	length := 1
+	text := "l"
 	loopComplete := false
 	for len(str) > 1 {
 		if loopComplete == true {
@@ -267,6 +266,7 @@ func readList(str string) BencodeText {
 			length = length + listText.Length
 			str = str[listText.Length:]
 		case str[0] == 'e':
+			text = text + "e"
 			length = length + 1
 			loopComplete = true
 			str = str[1:]

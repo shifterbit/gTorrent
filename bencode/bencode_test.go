@@ -82,7 +82,7 @@ func TestParseList(t *testing.T) {
 		{input: "li1ei2ei3ee", want: []any{1, 2, 3}},
 		{input: "l3:ham6:foobare", want: []any{"ham", "foobar"}},
 		{input: "lli2ei4eeli6ei8eee", want: []any{[]any{2, 4}, []any{6, 8}}},
-		{input: "ll3:foo:3:barel3:egg3:hamee", want: []any{[]any{"foo", "bar"}, []any{"egg", "ham"}}},
+		{input: "ll3:foo3:barel3:egg3:hamee", want: []any{[]any{"foo", "bar"}, []any{"egg", "ham"}}},
 		{input: "l3:fool3:foo3:barei25ee", want: []any{"foo", []any{"foo", "bar"}, 25}},
 	}
 
