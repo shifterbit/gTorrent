@@ -98,3 +98,28 @@ func TestParseList(t *testing.T) {
 	}
 
 }
+
+func TestParseDict(t *testing.T) {
+	type test struct {
+		input string
+		want  any
+	}
+
+	tests := []test{
+		{input: "d3:foo3:bar3:egg3:hame",
+			want: map[string]any{"foo": "bar", "egg": "ham"}},
+		{input: "d3:fooli2ei4ei6ee3:bard3:egg3:hamee",
+			want: map[string]any{"foo": []any{2,4,6}, "bar": map[string]any{"egg":"ham"} }},
+	}
+
+	for _, test := range tests {
+		got, err := ParseDict(test.input)
+		if err != nil {
+			t.Error(err)
+		}
+		if reflect.DeepEqual(got.Value(), test.want) == false {
+			t.Errorf("got %q, %v wanted %q, %v", got.Value(), err, test.want, nil)
+		}
+	}
+
+}

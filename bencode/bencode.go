@@ -32,6 +32,8 @@ type BencodeInt int
 
 type BencodeList []BencodeValue
 
+type BencodeDict map[string]BencodeValue
+
 func (s *BencodeString) Value() any {
 	return s.String
 }
@@ -46,6 +48,14 @@ func (l *BencodeList) Value() any {
 		list = append(list, item.Value())
 	}
 	return list
+}
+
+func (d *BencodeDict) Value() any {
+	dict := make(map[string]any)
+	for k, v := range *d {
+		dict[k] = v.Value()
+	}
+	return dict
 }
 
 type LeadingZeroError struct{}
@@ -64,8 +74,6 @@ func (e *IncorrectStringLengthError) Error() string {
 	return fmt.Sprintf("unexpected string length for %q, got %d, expected %d", e.String, e.ActualLength, e.ExpectedLength)
 }
 
-
-
 // Parses bencoded data and returns a `BencodeValue`
 func Parse(str string) (BencodeValue, error) {
 	start := str[0]
@@ -79,6 +87,8 @@ func Parse(str string) (BencodeValue, error) {
 		res, err = ParseInt(str)
 	case start == 'l':
 		res, err = ParseList(str)
+	case start == 'd':
+		res, err = ParseDict(str)
 	default:
 		res, err = nil, errors.New("Invalid bencode")
 	}
@@ -148,7 +158,7 @@ func ParseList(str string) (*BencodeList, error) {
 		switch {
 		case isDigit(string(str[0])):
 			text := readString(str)
-			val, err := Parse(str[:text.Length])
+			val, err := ParseString(str[:text.Length])
 			if err != nil {
 				return nil, err
 			}
@@ -156,7 +166,7 @@ func ParseList(str string) (*BencodeList, error) {
 			str = str[text.Length:]
 		case str[0] == 'i':
 			text := readInt(str)
-			val, err := Parse(str[:text.Length])
+			val, err := ParseInt(str[:text.Length])
 			if err != nil {
 				return nil, err
 			}
@@ -170,6 +180,14 @@ func ParseList(str string) (*BencodeList, error) {
 			}
 			list = append(list, val)
 			str = str[text.Length:]
+		case str[0] == 'd':
+			text := readDict(str[1:])
+			val, err := ParseDict(str[:text.Length])
+			if err != nil {
+				return nil, err
+			}
+			list = append(list, val)
+			str = str[text.Length:]
 		case str[0] == 'e':
 			str = str[1:]
 		}
@@ -178,10 +196,74 @@ func ParseList(str string) (*BencodeList, error) {
 	return &list, nil
 }
 
+func ParseDict(str string) (*BencodeDict, error) {
+	str = str[1:]
+	end := str[len(str)-1]
+	if end != 'e' {
+		return nil, errors.New("bencode: Unexpected End of File")
+	}
+	var list BencodeList
+	dict := make(BencodeDict)
+	for len(str) > 1 {
+		switch {
+		case isDigit(string(str[0])):
+			text := readString(str)
+			val, err := ParseString(str[:text.Length])
+			if err != nil {
+				return nil, err
+			}
+			list = append(list, val)
+			str = str[text.Length:]
+		case str[0] == 'i':
+			text := readInt(str)
+			val, err := ParseInt(str[:text.Length])
+			if err != nil {
+				return nil, err
+			}
+			list = append(list, val)
+			str = str[text.Length:]
+		case str[0] == 'l':
+			text := readList(str[1:])
+			val, err := ParseList(str[:text.Length])
+			if err != nil {
+				return nil, err
+			}
+			list = append(list, val)
+			str = str[text.Length:]
+		case str[0] == 'd':
+			text := readDict(str[1:])
+			val, err := ParseDict(str[:text.Length])
+			if err != nil {
+				return nil, err
+			}
+			list = append(list, val)
+			str = str[text.Length:]
+		case str[0] == 'e':
+			str = str[1:]
+		}
+	}
+
+	if isEven(len(list)) == false {
+		return nil, errors.New("bencode: missing entry in key value pairs")
+	}
+
+
+	for len(list) > 0 {
+		dict[list[0].Value().(string)] = list[1]
+		list = list[2:]
+	}
+
+	return &dict, nil
+}
+
 func isDigit(str string) bool {
 	start := string(str[0])
 	isDigit := regexp.MustCompile(`\d`)
 	return isDigit.MatchString(start)
+}
+
+func isEven(num int) bool {
+	return num%2 == 0
 }
 
 func readString(str string) BencodeText {
@@ -263,6 +345,50 @@ func readList(str string) BencodeText {
 			text = text + listText.String
 			length = length + listText.Length
 			str = str[listText.Length:]
+		case str[0] == 'd':
+			dictText := readDict(str)
+			text = text + dictText.String
+			length = length + dictText.Length
+			str = str[dictText.Length:]
+		case str[0] == 'e':
+			text = text + "e"
+			length = length + 1
+			loopComplete = true
+			str = str[1:]
+		}
+	}
+	return BencodeText{String: text, Length: length}
+}
+
+func readDict(str string) BencodeText {
+	length := 1
+	text := "d"
+	loopComplete := false
+	for len(str) > 1 {
+		if loopComplete == true {
+			break
+		}
+		switch {
+		case isDigit(string(str[0])):
+			stringText := readString(str)
+			text = text + stringText.String
+			length = length + stringText.Length
+			str = str[stringText.Length:]
+		case str[0] == 'i':
+			intText := readInt(str)
+			text = text + intText.String
+			length = length + intText.Length
+			str = str[intText.Length:]
+		case str[0] == 'l':
+			listText := readList(str)
+			text = text + listText.String
+			length = length + listText.Length
+			str = str[listText.Length:]
+		case str[0] == 'd':
+			dictText := readDict(str[1:])
+			text = text + dictText.String
+			length = length + dictText.Length
+			str = str[dictText.Length:]
 		case str[0] == 'e':
 			text = text + "e"
 			length = length + 1
