@@ -28,25 +28,21 @@ type BencodeString struct {
 	String string
 }
 
-type BencodeInt struct {
-	Number int
-}
+type BencodeInt int
 
-type BencodeList struct {
-	Items []BencodeValue
-}
+type BencodeList []BencodeValue
 
 func (s *BencodeString) Value() any {
 	return s.String
 }
 
 func (i *BencodeInt) Value() any {
-	return int(i.Number)
+	return int(*i)
 }
 
-func (i *BencodeList) Value() any {
+func (l *BencodeList) Value() any {
 	var list []any
-	for _, item := range i.Items {
+	for _, item := range *l {
 		list = append(list, item.Value())
 	}
 	return list
@@ -135,7 +131,9 @@ func ParseInt(str string) (*BencodeInt, error) {
 		return nil, err
 	}
 
-	return &BencodeInt{Number: num}, nil
+	result := BencodeInt(num)
+
+	return &result, nil
 }
 
 // Parse a bencoded list, returning a list of `BencodedValue`
@@ -154,7 +152,7 @@ func ParseList(str string) (*BencodeList, error) {
 			if err != nil {
 				return nil, err
 			}
-			list.Items = append(list.Items, val)
+			list = append(list, val)
 			str = str[text.Length:]
 		case str[0] == 'i':
 			text := readInt(str)
@@ -162,7 +160,7 @@ func ParseList(str string) (*BencodeList, error) {
 			if err != nil {
 				return nil, err
 			}
-			list.Items = append(list.Items, val)
+			list = append(list, val)
 			str = str[text.Length:]
 		case str[0] == 'l':
 			text := readList(str[1:])
@@ -170,7 +168,7 @@ func ParseList(str string) (*BencodeList, error) {
 			if err != nil {
 				return nil, err
 			}
-			list.Items = append(list.Items, val)
+			list = append(list, val)
 			str = str[text.Length:]
 		case str[0] == 'e':
 			str = str[1:]

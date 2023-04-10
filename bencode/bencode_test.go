@@ -13,9 +13,9 @@ func TestParseInt(t *testing.T) {
 	}
 
 	tests := []test{
-		{input: "i129e", want: BencodeInt{Number: 129}},
-		{input: "i23e", want: BencodeInt{Number: 23}},
-		{input: "i0e", want: BencodeInt{Number: 0}},
+		{input: "i129e", want: BencodeInt(129)},
+		{input: "i23e", want: BencodeInt(23)},
+		{input: "i0e", want: BencodeInt(0)},
 	}
 	for _, test := range tests {
 		got, err := ParseInt(test.input)
@@ -35,8 +35,9 @@ func TestParseIntLeadingZero(t *testing.T) {
 		err   error
 	}
 
+	zero := BencodeInt(0)
 	tests := []test{
-		{input: "i0e", want: nil, err: nil},
+		{input: "i0e", want: &zero, err: nil},
 		{input: "i023e", want: nil, err: &LeadingZeroError{}},
 		{input: "i000e", want: nil, err: &LeadingZeroError{}},
 	}
