@@ -3,6 +3,8 @@ package bencode
 import (
 	"errors"
 	"fmt"
+	"github.com/mitchellh/mapstructure"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -73,6 +75,30 @@ type IncorrectStringLengthError struct {
 
 func (e *IncorrectStringLengthError) Error() string {
 	return fmt.Sprintf("unexpected string length for %q, got %d, expected %d", e.String, e.ActualLength, e.ExpectedLength)
+}
+
+func Unmarshall(data []byte, v any) error {
+	bencodeVal, err := Parse(string(data))
+	if err != nil {
+		return err
+	}
+
+	rv := reflect.ValueOf(v).Elem()
+	switch rv.Kind() {
+	case reflect.Struct:
+		var dict = bencodeVal.Value()
+		// TODO
+		decoderConfig := mapstructure.DecoderConfig{TagName: "bencode", Result: v}
+		decoder, err := mapstructure.NewDecoder(&decoderConfig)
+		if err != nil {
+			return err
+		}
+		decoder.Decode(dict)
+	default:
+
+	}
+
+	return nil
 }
 
 // Parses bencoded data and returns a `BencodeValue`
@@ -247,7 +273,6 @@ func ParseDict(str string) (*BencodeDict, error) {
 	if isEven(len(list)) == false {
 		return nil, errors.New("bencode: missing entry in key value pairs")
 	}
-
 
 	for len(list) > 0 {
 		dict[list[0].Value().(string)] = list[1]
