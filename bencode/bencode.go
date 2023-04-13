@@ -18,7 +18,8 @@ type BencodeValue interface {
 	 Converts a Given `BencodeValue` to a plain Go value
 	   - `BencodeString` becomes `string`
 	   - `BencodeInt` becomes `int`
-	   - `BencodeList` becomes []interface
+	   - `BencodeList` becomes []any
+	   - `BencodeDict` becomes map[string]any
 	*/
 	Value() any
 }
@@ -34,25 +35,25 @@ type BencodeList []BencodeValue
 
 type BencodeDict map[string]BencodeValue
 
-func (s *BencodeString) Value() any {
+func (s BencodeString) Value() any {
 	return s.String
 }
 
-func (i *BencodeInt) Value() any {
-	return int(*i)
+func (i BencodeInt) Value() any {
+	return int(i)
 }
 
-func (l *BencodeList) Value() any {
+func (l BencodeList) Value() any {
 	var list []any
-	for _, item := range *l {
+	for _, item := range l {
 		list = append(list, item.Value())
 	}
 	return list
 }
 
-func (d *BencodeDict) Value() any {
+func (d BencodeDict) Value() any {
 	dict := make(map[string]any)
-	for k, v := range *d {
+	for k, v := range d {
 		dict[k] = v.Value()
 	}
 	return dict
