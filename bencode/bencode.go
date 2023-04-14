@@ -95,6 +95,9 @@ func Unmarshall(data []byte, v any) error {
 		}
 		decoder.Decode(dict)
 	default:
+		val := bencodeVal.Value()
+		rVal := reflect.ValueOf(val)
+		reflect.ValueOf(v).Elem().Set(rVal)
 
 	}
 
