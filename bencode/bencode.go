@@ -3,12 +3,18 @@ package bencode
 import (
 	"errors"
 	"fmt"
-	"github.com/mitchellh/mapstructure"
 	"reflect"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/mitchellh/mapstructure"
 )
+
+type Integer interface {
+	int | int8 | int16 | int32 | int64 | uint | uint8 | uint16 | uint32 | uint64
+}
 
 type BencodeText struct {
 	Length int
@@ -77,6 +83,14 @@ func (e *IncorrectStringLengthError) Error() string {
 	return fmt.Sprintf("unexpected string length for %q, got %d, expected %d", e.String, e.ActualLength, e.ExpectedLength)
 }
 
+func Marshall(v any) ([]byte, error) {
+	res, err := generateVal(v)
+	if err != nil {
+		return nil, err
+	}
+	return []byte(res), nil
+}
+
 func Unmarshall(data []byte, v any) error {
 	bencodeVal, err := Parse(string(data))
 	if err != nil {
@@ -87,7 +101,6 @@ func Unmarshall(data []byte, v any) error {
 	switch rv.Kind() {
 	case reflect.Struct:
 		var dict = bencodeVal.Value()
-		// TODO
 		decoderConfig := mapstructure.DecoderConfig{TagName: "bencode", Result: v}
 		decoder, err := mapstructure.NewDecoder(&decoderConfig)
 		if err != nil {
@@ -293,6 +306,77 @@ func isDigit(str string) bool {
 
 func isEven(num int) bool {
 	return num%2 == 0
+}
+
+func mapKeys(dict map[string]any) []string {
+	keys := make([]string, 0, 10)
+	for k := range dict {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
+func generateVal(v any) (string, error) {
+	rv := reflect.ValueOf(v)
+	for rv.Kind() == reflect.Pointer {
+		rv = rv.Elem()
+	}
+	switch rv.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return generateInt(v.(int)), nil
+	case reflect.String:
+		return generateString(v.(string)), nil
+	case reflect.Slice, reflect.Array:
+		res := "l"
+		for _, v := range v.([]any)[:] {
+			val, err := generateVal(v)
+			if err != nil {
+				return "", err
+			}
+			res += val
+		}
+		res += "e"
+		return res, nil
+	case reflect.Map:
+		res := "d"
+		v := rv.Interface()
+		keys := mapKeys(v.(map[string]any))
+		sort.Strings(keys)
+		for k, v := range v.(map[string]any) {
+			res += generateString(k)
+			val, err := generateVal(v)
+			if err != nil {
+				return "", err
+			}
+			res += val
+		}
+		res += "e"
+		return res, nil
+	case reflect.Struct:
+		dict := new(map[string]any)
+		decoderConfig := mapstructure.DecoderConfig{TagName: "bencode", Result: dict}
+		decoder, err := mapstructure.NewDecoder(&decoderConfig)
+		if err != nil {
+			return "", err
+		}
+		decoder.Decode(v)
+		return generateVal(&dict)
+	}
+	return "", nil
+}
+
+func generateString(str string) string {
+	length := len(str)
+	num := strconv.Itoa(length)
+	res := num + ":" + str
+	return res
+}
+
+func generateInt[I Integer](num I) string {
+	number := strconv.Itoa(int(num))
+	res := "i" + number + "e"
+	return res
 }
 
 func readString(str string) BencodeText {
